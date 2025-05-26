@@ -5,8 +5,12 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Property Estimates by Sq Ft scatter chart</title>
 		<link rel="icon" href="favicon2.ico" type="image/x-icon" />
+		<!--
 		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+		-->
+		<script src="chart.js"></script>
+		<script src="chartjs-plugin-datalabels.js"></script>		
 		<style>
 			body {
 				font-family: Arial, sans-serif;
@@ -17,9 +21,9 @@
 			.chart-container {
 				width: 80%;
 				margin: auto;
-				padding: 20px;
+				padding: 2em;
 				border: 1px solid #ccc;
-				border-radius: 10px;
+				border-radius: 1em;
 				margin-top: 1em;
 			}
 			.checkbox-container {
@@ -29,7 +33,7 @@
 				margin-bottom: 1em;
 			}
 			.checkbox-item {
-				margin-right: 1em;
+				margin: 0.5em 1em;
 			}
 			.stats {
 				display: flex;
@@ -40,6 +44,7 @@
 		</style>
 	</head>
 	<body>
+		<!-- Checkbox controls for filtering chart data -->
 		<div class="checkbox-container">
 			<div class="checkbox-item">
 				<input type="checkbox" id="setA" name="setFilter" value="RE" checked />
@@ -53,34 +58,40 @@
 				<input type="checkbox" id="setOther" name="setFilter" value="OTHER" unchecked />
 				<label for="setOther">Other</label>
 			</div>
-
 			<div class="checkbox-item">
 				<input type="checkbox" id="lines" name="setFilter" value="RL" checked />
-				<label for="line3">Reference Lines</label>
+				<label for="lines">Reference Lines</label>
 			</div>
 		</div>
+
+		<!-- Summary statistics -->
 		<div class="stats"><p id="statistics"></p></div>
+
+		<!-- Chart -->
 		<div class="chart-container">
-			<canvas id="scatterChart"></canvas>
+			<canvas id="mixedChart"></canvas>
 		</div>
 
 		<script>
-			console.log('Scatter chart with checkboxes');
+			console.log('Main script start');
 
-			// HTML integrations
-			const stats = document.getElementById('statistics');
-			const ctx = document.getElementById('scatterChart').getContext('2d');
-			const ChartOptions = 'input[name="setFilter"]'; // checkboxes for chart settings
-			const RE = 'RE'; // checkbox value RealEstimate
-			const ZE = 'ZE'; // checkbox value Zestimate
-			const other = 'OTHER'; // checkbox value Other
-			const RL = 'RL'; // checkbox value Referelecne Lines
+			// HTML elements
+			const statisticsElement = document.getElementById('statistics');
+			const chartElement = document.getElementById('mixedChart').getContext('2d');
+			const ChartOptions = 'input[name="setFilter"]'; // CSS selector for checkboxes
 
-			// Reference Lines 
-			const AM = 'AM'; 
-			const OLD = 'OLD'; 
-			const NEW = 'NEW';
-			const REAL = 'REAL';
+			// Dataset ids used in HTML and properties{}
+			// HTML checkbox values to toggle dataset visibility
+			const RE = 'RE'; // RealEstimate dataset
+			const ZE = 'ZE'; // Zestimate dataset
+			const other = 'OTHER'; // any Other estimates
+			const RL = 'RL'; // Reference Lines
+
+			// Reference Line datasets
+			const RL_AM = 'RL_AM'; 
+			const RL_OLD = 'RL_OLD'; 
+			const RL_NEW = 'RL_NEW';
+			const RL_REAL = 'RL_REAL';
 			const AVG = ' Average'; // label suffex for RE or ZE average reference lines  
 
 			// unique placeholder keys - the exact values don't matter
@@ -88,41 +99,36 @@
 			const MAXSF = 'maxsf'; 
 
 			const sets = { // strings and colors for chart datasets
-				AM: { label: 'AlphaMap Avg', color: 'purple', note: 'AlphaMap.coma avg for 0.3 miles' },  
 				RE: { label: 'RealEstimate', color: 'rgba(54, 179, 39, 0.8)', note: 'Realtor.com' }, 
 				ZE: { label: 'Zestimate', color: 'rgba(95, 96, 26, 0.8)', note: 'Zillow.com'}, 
 				OTHER: { label: 'Other Estimates', color: 'rgba(245, 170, 40, 0.6)', note: ''},
-				OLD: { label: 'My old sqft', color: 'fuchsia', note: '1935 Assessment'}, 
-				NEW: { label: 'My new sqft', color: 'red', note: '2024 Assessment'},  
-				REAL: {label: 'My Assessment', color: 'blue', note: 'most acurate assessment'}, 		
+				RL_AM : { label: 'AlphaMap Avg', color: 'purple', note: 'AlphaMap.coma avg for 0.3 miles' },  
+				RL_OLD: { label: 'My old sqft', color: 'fuchsia', note: '1935 Assessment'}, 
+				RL_NEW: { label: 'My new sqft', color: 'red', note: '2024 Assessment'},  
+				RL_REAL: {label: 'My Assessment', color: 'blue', note: 'most acurate assessment'}, 		
 				DEFAULT: { label: '(undefined)', color: 'rgba(150, 150, 150, 0.6)', note: ''},		
 			}
 
-			// label helper 
-			function labelMap ( set ) {
-				if ( sets[set].label) return( sets[set].label);
-				else return sets.DEFAULT.label;
-			}
 
-			// color helper 
-			function colorMap ( set ) {
-				if ( sets[set].color) return( sets[set].color);
-				else return sets.DEFAULT.color;
-			}
+			// --- Data Definitions ---
 
-			// historical sq ft values, fixed.
+			// Reference property assessment sizes (sqft), dataset key, and description
+			// These are used to draw vertical reference lines at their assessed sqft values.
 			const assessments = [
-				[1116, OLD ], // main house footprint, 17% is in walls and the front porch
-				[1766, NEW ], // main house + back room footprint, 15% is walls, porch, or outside the footprint
-				[1944, REAL ], // finished living space for main house, back room, and upper level
+				[1116, RL_OLD, 'main house footprint, 17% is in walls and the front porch'],
+				[1766, RL_NEW, 'main house + back room footprint, 15% is walls, porch, or outside the footprint'],
+				[1944, RL_REAL, 'finished living space for main house, back room, and upper level'],
 			];
+			// Extract the dataset keys for easy iteration.
 			const assessmentLines = assessments.map((item) => item[1]);
 			console.log('Assessments: ', ...assessmentLines);
 		
 			// Property data
 			// IMPORTANT: do not change properties{} structure 
 			const properties = {
-				records: [
+				// field positions in records[[array]]
+				sqft: 0, value: 1, label: 2, set: 3, note: 4, 
+				records: [ 
 					[984, 370000, '1022 Curran', ZE, '04/18/2025'],
 					[984, 377600, '1022 Curran', RE, '04/18/2025'],
 					[1725, 504000, '10th St', ZE, '04/18/2025 Townhouse'],
@@ -197,45 +203,97 @@
 
 					[1050, 427572, '1185 Mecaslin', RE, '04/20/2025'],
 				],
-					// field positions in records[[array]]
-					sqft: 0, value: 1, label: 2, set: 3, date: 4, 
 			};
 
-			// Reference lines for the scatter chart
+			// Reference line data for the chart
 			// IMPORTANT: structure mirrors properties{} 
 			let lines = {
+				// field positions in records[[array]]
+				sqft: 0, value: 1, label: 2, set: 3, note: 4, 
 				records: [ // MINSF and MAXSF will get updated to reflect actual property data
-					[ MINSF, 628739, '0.3 mi Avg', AM, '2024 data'], 
-					[ MAXSF, 628739, '', AM, '2024 data'], // label intionally omitted  
+					[ MINSF, 628739, '0.3 mi Avg', RL_AM , '2024 data'], 
+					[ MAXSF, 628739, '', RL_AM , '2024 data'], // label intionally omitted  
 
 					// more records will get appended by AddAssessmentReferenceLines()
 				],
-				// field positions in records[[array]]
-				sqft: 0, value: 1, label: 2, set: 3, date: 4, 
 			};
 
-			// Averages for RE, ZE, Other will get calculated later
+			// Averages for RE, ZE, and Other datasets. Records will be created later
 			// IMPORTANT: structure mirrors properties{} 
 			let avgs = { 
-				records: [],
 				// field positions in records[[array]]
-				sqft: 0, value: 1, label: 2, set: 3, date: 4, 
+				sqft: 0, value: 1, label: 2, set: 3, note: 4, 
+				records: [],
 			};
 
-			// Calculate reference lines from properties and and assessment data
-			findSetAverages(properties);
+			// --- Helper Functions ---
+
+			// Retrieve the set-specific display label if available.
+			function labelMap( set ) {
+				return sets[set]?.label || sets.DEFAULT.label;
+			}
+			
+			// Retrieve the set-specific rgba color if available.
+			function colorMap( set ) {
+				return sets[set]?.color || sets.DEFAULT.color;
+			}
+
+			// Boolean Test. 'OTHER' sets are neither RE nor ZE.
+			// facilitates filtering in createScatterDataset()
+			function isOtherSet( set ) { 
+				return set !== RE && set !== ZE;
+			}
+		
+			// Convert an RGBA color string to have full opacity (alpha = 1) for borders.
+			function getOpaqueBorderColor(rgbaColor) {
+				if (typeof rgbaColor === 'string' && rgbaColor.startsWith('rgba(')) { 
+					return rgbaColor.replace(/, [\d\.]+([,\)])/, ', 1$1'); // Sets alpha to 1
+				}
+				else return rgbaColor; // unchanged
+			}
+
+			// Replace MINSF and MAXSF placeholders with given sqft values
+			function updateLineSqft( min, max ) {
+				const sf = lines.sqft; // array index
+				lines.records.forEach( r => {
+					if ( MINSF === r[sf] ) r[sf] = min;
+					if ( MAXSF === r[sf] ) r[sf] = max;
+				});
+			}
+
+			/**
+			 * Parse URL query string to get any initially selected sets.
+			 * @returns {Array<string>} An array of selected set values.
+			 */
+			 function getInitialSelectedSetsFromUrl() {
+				const params = new URLSearchParams(window.location.search);
+				const setsParam = params.get('sets');
+				if (setsParam) {
+					return setsParam.split(',');
+				}
+				// Default selected sets if no 'sets' parameter in URL
+				return Array.from(document.querySelectorAll('input[name="setData"]:checked')).map(
+					(checkbox) => checkbox.value
+				);
+			}
+
+			// --- Data Processing and Reference Line Generation ---
+
+			// Get all checked checkboxes
+			let selectedSets = Array.from(document.querySelectorAll(ChartOptions+':checked')).map(
+				(checkbox) => checkbox.value
+			);
+				
+			// Calculate reference lines from properties and assessment data
+			findAllSetAverages( selectedSets );
 
 			AddAssessmentReferenceLines();
 
-			// Get unique set values from the lines data for legend and filtering
-			//const lineSets = Array.from(new Set(lines.records.map((record) => record[lines.set])));
-			//console.log('Reference Line sets: ', lineSets);
 			console.log('Reference line data: ', lines.records);
 
-			let scatterChart; // Declare the chart variable
-
-			// Initial chart render with default selected sets
-			updateChart();
+			let mixedChart;  // Declare the chart.js context variable
+			
+			updateChart(false); // Initial chart render with default selected sets
 
 			// Event listener for checkbox changes
 			document.querySelectorAll(ChartOptions).forEach((checkbox) => {
@@ -244,27 +302,28 @@
 				});
 			});
 
-			function AddAssessmentReferenceLines(minSize = 800, maxSize = 2200) {
+			// Event listener for browser back/forward buttons
+			window.onpopstate = function (event) {
+				const selectedSetsOnPop = getInitialSelectedSetsFromUrl();
+				document.querySelectorAll(ChartOptions).forEach((checkbox) => {
+					checkbox.checked = selectedSetsOnPop.includes(checkbox.value);
+				});
+				updateChart(false); // Do not pushState again on popstate
+			};
+
+			function AddAssessmentReferenceLines() {
 				/* these point will define a line of house values for each Price Per Square Foot (PPSF) */
-
-				// Find the smallest and largest sqft values in the properties data
-				const smallestSqft =
-					1.0 * Math.min(...properties.records.map((record) => record[properties.sqft])).toPrecision(2);
-				const largestSqft =
-					1.0 * Math.max(...properties.records.map((record) => record[properties.sqft])).toPrecision(2);
-
-				// Replace 'MINSF' and'MAXSF' placeholders with actual values. Only affects the AM set
-				for (let i = 0; i < lines.records.length; i++) {
-					if (lines.records[i][0] === 'MINSF') lines.records[i][0] = smallestSqft;
-					if (lines.records[i][0] === 'MAXSF') lines.records[i][0] = largestSqft;
-				}
+				
+				const allSqfts = properties.records.map(record => record[properties.sqft]);
+				const minSqft = parseFloat(Math.min(...allSqfts).toPrecision(2));
+				const maxSqft = parseFloat(Math.max(...allSqfts).toPrecision(2));
+				//console.log( minSqft, maxSqft);
+				updateLineSqft( minSqft, maxSqft );
 
 				// Calculate average price per square foot (PPSF) from the avgs.records
 				avgPPSF = avgs.records[0][avgs.value] / avgs.records[0][avgs.sqft];
 				minVerticalrate = (0.7 * avgPPSF).toFixed(0); // 30% below average
 				maxVerticalrate = (1.2 * avgPPSF).toFixed(0); // 20% above average
-
-				//lines.records = []; // lines that go through to each assessment point
 
 				// create datapoints to define vertical reference lines at each assessment size
 				assessments.forEach((a) => {
@@ -301,16 +360,16 @@
 
 					const PPSF = (value / sqft).toPrecision(3); // Price Per Square Foot
 					// console.log(`${label}: $${PPSF} per sqft`);
-					lines.records.push([minSize, minSize * PPSF, '', label, PPSF]);
-					lines.records.push([maxSize, maxSize * PPSF, label + ' at $' + PPSF, label, PPSF]);
+					lines.records.push([minSqft, minSqft * PPSF, '', label, PPSF]);
+					lines.records.push([maxSqft, maxSqft * PPSF, label + ' at $' + PPSF, label, PPSF]);
 
 				});
 				console.log('Reference lines: ', lines.records);
-			}
+			} // AddAssessmentReferenceLines
 
-			function findSetAverages(properties) {
-				// Find the average property values for each set
-				const estimatesSets = [RE, ZE, other];
+			// Find the average property values for each set, once
+			function findAllSetAverages() {
+				const estimatesSets = [ RE, ZE, other ];
 				estimatesSets.forEach((set) => {
 					let setRecords;
 					if (set === other) {
@@ -331,9 +390,11 @@
 					}
 				});
 				console.log('Set' + AVG, avgs.records);
-			}
+			} // end findAllSetAverages()
 
-			function calculateAveragePropertyMetrics(properties, selectedSets) {
+
+			// Find the average property values for the currently selected sets
+			function findAverages( selectedSets) {
 				if (!properties || !properties.records || properties.records.length === 0) {
 					return { averageTax: 0, averageSqft: 0 };
 				}
@@ -359,74 +420,65 @@
 				// Avoid division by zero
 				const averageSqft = metrics.cnt > 0 ? metrics.sqft / metrics.cnt : 0;
 				const averageValue = metrics.cnt > 0 ? metrics.value / metrics.cnt : 0;
-
 				return {
-					averageSqft: 1.0 * averageSqft.toPrecision(3),
-					averageValue: 1.0 * averageValue.toPrecision(3),
+					averageSqft: parseFloat(averageSqft.toPrecision(3)), 
+					averageValue: parseFloat(averageValue.toPrecision(3)), 
 				};
-			}
 
-			// helper for createScatterDataset()
-			function isOtherSet(recordSet) {
-					return recordSet !== RE && recordSet !== ZE;
-			}
-		
-			function getOpaqueBorderColor(rgbaColor) {
-				if (rgbaColor && rgbaColor.startsWith('rgba(')) {
-					return rgbaColor.replace(/, [\d\.]+\)$/, ', 1)');
-				}
-				return rgbaColor;
-			}
+			} // end findAverages()
+
 
 			// config helper for updateChart() 
 			function createScatterDataset(setType) {
 				let filteredData = [];
 				if (setType === other) {
-					filteredData = properties.records.filter((record) => isOtherSet(record.set));
+					filteredData = properties.records.filter((record) => isOtherSet(record[properties.set]));
 				} else {
-					filteredData = properties.records.filter((record) => record.set === setType);
+					filteredData = properties.records.filter((record) => record[properties.set] === setType);
 				}
+				console.log( 'Add', filteredData.length, sets[setType].label + 's',   );				
 
 				if (filteredData.length === 0) {
 					console.warn ( 'no data filtered for scatter', setType );
 					return null;
 				}
-
-
 				return {
 					type: 'scatter',
-					label: currentLabelMap[setType],
+					label: sets[setType].label,
 					data: filteredData.map((record) => ({
-						x: record.sqft,
-						y: record.value,
-						label: record.label,
-						date: record.date,
+						x: record[properties.sqft],
+						y: record[properties.value],
+						label: record[properties.label],
+						date: record[properties.note],
 					})),
 					backgroundColor: sets[setType].color,
-					borderColor: (sets[setType].color).replace('0.8', '1'), // getOpaqueBorderColor(sets[setType].color)
+					borderColor: getOpaqueBorderColor(sets[setType].color),  
 					pointRadius: 5,
 					pointHoverRadius: 8,
+					showLine: false, // no lines between scatter points
 				};
-			}
+			} // end createScatterDataset()
 
 			// config helper for updateChart() 
-			function createLineDataset( setType ) {
-				const filteredLineData = lines.records.filter((record) => record.set === setType);
+			function createLineDataset( set ) {
+				const filteredLineData = lines.records.filter((record) => record[properties.set] === set);
 				if (filteredLineData.length === 0) {
-					console.warn ( 'no data filtered for line', setType );
+					console.warn ( 'no data filtered for line', set );
 					return null;
 				}
+				//console.log ( 'filtered line Data', filteredLineData );
+
 				return {
 					type: 'line',
-					label: labelText,
+					label: labelMap(set),
 					data: filteredLineData.map((record) => ({
-						x: parseFloat(record.sqft),
-						y: parseFloat(record.value),
-						label: record.label,
-						date: record.date,
+						x: record[properties.sqft],
+						y: record[properties.value],
+						label: record[properties.label],
+						date: record[properties.note],
 					})),
 					fill: false,
-					borderColor: sets[setType].color || sets.DEFAULT.color,
+					borderColor: sets[set].color || sets.DEFAULT.color,
 					backgroundColor: 'rgba(255, 255, 255, 0.8)',
 					tension: 0,
 					pointRadius: 1,
@@ -434,92 +486,58 @@
 					pointHoverRadius: 3,
 					showLine: true,
 				};
-			}
+			} // end createLineDataset()
 
-
-			function updateChart() {
+			function updateChart(pushState = true) {
 				const datasets = [];
 
 				// Get all checked checkboxes
 				const selectedSets = Array.from(document.querySelectorAll(ChartOptions+':checked')).map(
 					(checkbox) => checkbox.value
 				);
-				console.log('checkboxes: ', selectedSets);
+				console.log( 'Checked: ', ...selectedSets);
 
-				// Add datasets for selected scatter points sets
+				// Update URL with selected sets if pushState is true
+				if (pushState) {
+					const newUrl = new URL(window.location.href);
+					if (selectedSets.length > 0) {
+						newUrl.searchParams.set('sets', selectedSets.join(','));
+					} else {
+						newUrl.searchParams.delete('sets');
+					}
+					history.pushState({ sets: selectedSets }, '', newUrl.toString());
+				}
+
 
 				// Handle the main scatter points
-				const scatterPointTypes = [RE, ZE]; // could add Redfin, etc.
+				const scatterPointTypes = [ RE, ZE ]; // could add Redfin, etc.
 				scatterPointTypes.forEach((set) => {
 					if (selectedSets.includes(set)) {
-						
-						/* Refactor code idea in progress */
 						const scatterData = createScatterDataset( set );
 						if (scatterData) {
+							//console.log( 'scatterData', scatterData ); // TESTING
 							datasets.push(scatterData);
 						}
-						else { // fallback while createScatterData(set) is broken
-							datasets.push({
-								type: 'scatter', // Explicit
-								label: sets[set].label,
-								data: properties.records
-									.filter((record) => record[properties.set] === set)
-									.map((record) => ({
-										x: record[properties.sqft],
-										y: record[properties.value],
-										label: record[properties.label],
-										date: record[properties.date],
-									})),
-								backgroundColor: sets[set].color,
-								borderColor: (sets[set].color).replace('0.8', '1'), // getOpaqueBorderColor(sets[set].color)
-								pointRadius: 5,
-								pointHoverRadius: 8,
-							}); 
-						};
-						// Check for a reference lines if RL checkbox is selected
-						// IMPORTANT: reference line added here so the line legend appears immediately next to its corresponding scatter set legend
-						// DO NOT MOVE or combine with the other RL handler further below 
-						if (selectedSets.includes(RL)) {
-							
-							/* Refector idea */
-							// const lineData = createLineDataset( set );  
-							// if (lineData) datasets.push(lineData);
-						
-							const lineData = lines.records
-								.filter((record) => record[lines.set] === set)
-								.map((record) => ({
-									x: parseFloat(record[lines.sqft]),
-									y: parseFloat(record[lines.value]),
-									label: record[lines.label],
-								}));
 
-							// add the reference line data corresponding to the this scatter point set
-							if (lineData.length > 0) {
-								datasets.push({
-									type: 'line', // Explicitly set type to line
-									label: sets[set].label + AVG, 
-									data: lineData,
-									fill: false, // no fill color in the area below the line
-									borderColor: sets[set].color || sets.DEFAULT.color, 
-									backgroundColor: 'rgba(255, 255, 255, 0.8)', // white fill, color only the legend border (line)
-									tension: 0, // Straight lines
-									pointRadius: 1,
-									borderWidth: 1, // Line width
-									pointHoverRadius: 1, // allow hover effect on points
-									showLine: true, // Ensure the line is drawn
-								});
-								console.log('Added Reference line for ', sets[set].label + AVG);
-							}
+						// Display the set's reference line if RL checkbox is selected
+						// IMPORTANT: reference line is added here so the line legend appears immediately next to its corresponding scatter set legend
+						// DO NOT MOVE or combine with the other RL handler further below 
+						if (selectedSets.includes(RL)) {						
+							const lineDataset = createLineDataset( set );  
+							if (lineDataset) datasets.push(lineDataset);
+							console.log( 'Add reference line:', set + AVG, parseFloat(lineDataset.data[0].date), '$/sqft');
 						}
 					}
 				});
 
-				// Handle 'Other' scatter points, not RE and not ZE
+				// Handle isOtherSet scatter points, i.e., not RE and not ZE
 				if (selectedSets.includes(other)) {
 					const otherRecords = properties.records.filter(
 						(record) => record[properties.set] !== RE && record[properties.set] !== ZE
-					);
+					); // TO DO: consider using isOtherSet(set) in filter
+
 					if (otherRecords.length > 0) {
+						console.log( 'Add', otherRecords.length, other, 'estimates' );				
 						datasets.push({
 							type: 'scatter', // Explicit
 							label: sets[other].label,
@@ -539,33 +557,11 @@
 
 				// Handle the other reference lines if RL checkbox is selected
 				if (selectedSets.includes( RL )) {
-					// Add Assessments reference lines
-					assessmentLines.forEach((set_value) => {
-						console.log('Add reference line for ', sets[set_value].label); 
-
-						const lineData = lines.records
-							.filter((record) => record[lines.set] === set_value)
-							.map((record) => ({
-								x: parseFloat(record[lines.sqft]),
-								y: parseFloat(record[lines.value]),
-								label: record[lines.label],
-							}));
-
-						if (lineData.length > 0) {
-							datasets.push({
-								type: 'line', // Explicitly set type to line
-								label: sets[set_value].label || sets.DEFAULT.label, 
-								data: lineData,
-								fill: false, // no fill color in the area below the line
-								borderColor: sets[set_value].color || sets.DEFAULT.color, 
-								backgroundColor: 'rgba(255, 255, 255, 0.8)', // white fill, color only the legend border (line)
-								tension: 0, // Straight lines
-								pointRadius: 1, //  points on the lines
-								borderWidth: 1, // Line width
-								pointHoverRadius: 3, //  hover effect on points
-								showLine: true, // Ensure the line is drawn
-							});
-						}
+					const lineReferenceTypes = [ RL_AM, RL_NEW, RL_OLD, RL_REAL ];
+					lineReferenceTypes.forEach((set) => {
+						console.log('Add reference line for ', sets[set].label); 
+						const lineData = createLineDataset( set );  
+						if (lineData) datasets.push(lineData);
 					});
 				}
 
@@ -577,12 +573,7 @@
 						maintainAspectRatio: true,
 						title: {
 							display: true,
-							text:
-								datasets.length > 1
-									? 'Sqft vs. Value'
-									: datasets.length === 1
-									? `Sqft vs. Value (${datasets[0].label})`
-									: 'Sqft vs. Value',
+							text: 'Estimated values vs. assessed square feet',
 							font: {
 								size: 18,
 								color: '#333',
@@ -691,20 +682,21 @@
 					plugins: [ChartDataLabels],
 				};
 
-				if (scatterChart) {
-					scatterChart.destroy();
+				if (mixedChart) {
+					mixedChart.destroy();
 				}
-				scatterChart = new Chart(ctx, config);
+				mixedChart = new Chart(chartElement, config);
 
-				let metrics = calculateAveragePropertyMetrics(properties, selectedSets);
-				console.log('Metrics for selections: ', metrics);
-
+				let metrics = findAverages(selectedSets);
+				//console.log('Metrics for selections: ', metrics);
+				//console.log( 'avgs: ', avgs );
 				const ppsf = (metrics.averageValue / metrics.averageSqft).toPrecision(3);
-				stats.innerHTML = 'Average [';
-				stats.innerHTML += '$' + ppsf + '/sq ft, ';
-				stats.innerHTML += '$' + (metrics.averageValue / 1000).toFixed(0) + 'K, ';
-				stats.innerHTML += metrics.averageSqft + ' sq ft ]';
-			}
+				statisticsElement.innerHTML = 'Average for these estimates: ';
+				statisticsElement.innerHTML += '$' + ppsf + '/sq ft, ';
+				statisticsElement.innerHTML += '$' + (metrics.averageValue / 1000).toFixed(0) + 'K, ';
+				statisticsElement.innerHTML += metrics.averageSqft + ' sq ft';
+			} // end updateChart()
+
 		</script>
 	</body>
 </html>
