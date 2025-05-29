@@ -51,16 +51,16 @@
 		<!-- Checkbox controls for filtering chart data -->
 		<div class="checkbox-container">
 			<div class="checkbox-item">
-				<input type="checkbox" id="YR23" name="setFilter" value="yr23" unchecked />
-				<label for="setA">2023 Taxes</label>
+				<input type="checkbox" id="SET1" name="setFilter" value="YR23" unchecked />
+				<label for="SET1">2023 Taxes</label>
 			</div>
 			<div class="checkbox-item">
-				<input type="checkbox" id="YR24" name="setFilter" value="yr24" checked />
-				<label for="setB">2024 Taxes</label>
+				<input type="checkbox" id="SET2" name="setFilter" value="YR24" checked />
+				<label for="SET2">2024 Taxes</label>
 			</div>
 			<div class="checkbox-item">
-				<input type="checkbox" id="OTHER" name="setFilter" value="OTHER" checked />
-				<label for="OTHER">Other</label>
+				<input type="checkbox" id="SET0" name="setFilter" value="OTHER" unchecked />
+				<label for="SET0">Other</label>
 			</div>
 			<div class="checkbox-item">
 				<input type="checkbox" id="lines" name="setFilter" value="RL" checked />
@@ -74,6 +74,9 @@
 		<script>
 			console.log('Main script start');
 
+			YAXISLABEL = 'Property Taxes Paid';
+			XAXISLABEL = "Assesssed Square Footage";
+
 			// HTML elements
 			const statisticsElement = document.getElementById('statistics');
 			const chartElement = document.getElementById('mixedChart').getContext('2d');
@@ -81,8 +84,10 @@
 
 			// Dataset ids used in HTML and properties{}
 			// HTML checkbox values to toggle dataset visibility
-			const YR24 = 'YR24'; //  2024
-			const YR23 = 'YR23'; //  2023
+			const YR24 = 'YR24'; // 2024 dataset
+			const YR23 = 'YR23'; //  2023 dataset
+			const SET1 = 'YR23'; 
+			const SET2 = 'YR24'; 
 			const OTHER = 'OTHER'; // any other scatter sets
 			const RL = 'RL'; // Reference Lines
 
@@ -107,31 +112,21 @@
 				RL_NEW: { label: 'My new sqft', color: 'red', note: '2024 Assessment' },
 				RL_REAL: { label: 'My Assessment', color: 'blue', note: 'most acurate assessment' },
 				DEFAULT: { label: '(undefined)', color: 'rgba(150, 150, 150, 0.6)', note: '' },
-				AM: {},
 			};
 
 			// --- Data Definitions ---
 
-			// Reference property assessment sizes (sqft), dataset key, and description
-			// These are used to draw vertical reference lines at their assessed sqft values.
-			const assessments = [
-				{ set: RL_OLD, sqft: 1116, note: '1935 original, entire footprint and porch' },
-				{ set: RL_NEW, sqft: 1766, note: '2024 extention, added backroom and errors' },
-				{ set: RL_REAL, sqft: 1944, note: 'most accurate assessment, includes upstairs ' },
-			];
-
-			// Property data
-			// IMPORTANT: do not change properties{} structure
-			const properties = {
+			// Real Estate Tax data
+			// IMPORTANT: do not change the structure
+			const taxes = {
 				// field positions in records[[array]]
 				sqft: 0,
-				value: 1,
+				value: 1, // real estate taxes
 				label: 2,
 				set: 3,
-				date: 4,
-
+				note: 4,
 				records: [
-					[984, 2074, '1022 Curran', 'yr24', ''],
+					[984, 2074, '1022 Curran', YR24, ''],
 					[984, 2337, '1022 Curran', YR23, ''],
 
 					[1888, 10122, '1190 Atlantic', YR24,''],
@@ -202,6 +197,9 @@
 				],
 			};
 
+			// Property Data
+			const properties = taxes; // use real estate tax values
+
 			// Reference line data for the chart
 			// IMPORTANT: structure mirrors properties{}
 			let lines = {
@@ -219,7 +217,15 @@
 				],
 			};
 
-			// Averages for YR23, YR24, and OTHER datasets. Records will be created later
+			// Reference property assessment sizes (sqft), dataset key, and description
+			// These are used to draw vertical reference lines at their assessed sqft values.
+			const assessments = [
+				{ set: RL_OLD, sqft: 1116, note: '1935 original, entire footprint and porch' },
+				{ set: RL_NEW, sqft: 1766, note: '2024 extention, added backroom and errors' },
+				{ set: RL_REAL, sqft: 1944, note: 'most accurate assessment, includes upstairs ' },
+			];
+
+			// Averages for SET1, SET2, and OTHER datasets. Records will be created later
 			// IMPORTANT: structure mirrors properties{}
 			let avgs = {
 				// field positions in records[[array]]
@@ -233,6 +239,14 @@
 
 			// --- Helper Functions ---
 
+			// Use 'K' for large values
+			function valueFormatter ( value ) {
+				if ( value > 20000 )
+					return( '$' + (value /1000).toFixed(0).toLocaleString() + 'K' );
+				else
+					return ( '$' + (value.toFixed(0)).toLocaleString() );
+			}
+
 			// Retrieve the set-specific display label if available.
 			function labelMap(set) {
 				return sets[set]?.label || sets.DEFAULT.label;
@@ -243,10 +257,10 @@
 				return sets[set]?.color || sets.DEFAULT.color;
 			}
 
-			// Boolean Test. OTHER sets are neither YR23 not YR24.
+			// Boolean Test. OTHER sets are neither SET1 nor SET2.
 			// facilitates filtering in createScatterDataset()
 			function isOtherSet(set) {
-				return set !== YR23 && set !== YR24;
+				return set !== SET1 && set !== SET2;
 			}
 
 			// Convert an RGBA color string to have full opacity (alpha = 1) for borders.
@@ -266,7 +280,7 @@
 			}
 
 			/**
-			 * Parse  URL query string to get any initially selected sets.
+			 * Parse URL query string to get any initially selected sets.
 			 * @returns {Array<string>} An array of selected set values.
 			 */
 			function getInitialSelectedSetsFromUrl() {
@@ -281,7 +295,6 @@
 				);
 			}
 
-			//console.log('Reference line data: ', lines.records);
 
 			// --- Data Processing and Reference Line Generation ---
 
@@ -316,34 +329,21 @@
 			};
 
 			function AddAssessmentReferenceLines() {
-				/* these point pairs define a line of house values for each Taxes Per Square Foot (TPSF) */
-
-				// Find horizontal bounds for reference lines to fit within the extents of the properties{} data
-				const minSqFt =
-					1.0 * Math.min(...properties.records.map((record) => record[properties.sqft])).toPrecision(2);
-				const maxSqFt =
-					1.0 * Math.max(...properties.records.map((record) => record[properties.sqft])).toPrecision(2);
-
-				// Replace sqft placeholders with actual values from properties{} data
-				for (let i = 0; i < lines.records.length; i++) {
-					if (lines.records[i][0] === MINSF) lines.records[i][0] = minSqFt;
-					if (lines.records[i][0] === MAXSF) lines.records[i][0] = maxSqFt;
-				}
+				/* create various pairs of line.records[] */
 
 				// Set a range for reasonable variances from an average or median tax per square foot (TPSF)
-				const plausibleDiscount = 0.7; // 30% discount
-				const plausiblePremium = 1.3; // 30% premium
+				const Discount = 0.7; // 30% discount
+				const Premium = 1.3; // 30% premium
 
 				// Find vertical bounds for reference lines around average tax per square foot (TPSF)
 				avgTPSF = avgs.records[0][avgs.value] / avgs.records[0][avgs.sqft];
-				minValue = (plausibleDiscount * avgTPSF).toFixed(0); // least value below the average TPSF
-				maxValue = (plausiblePremium * avgTPSF).toFixed(0); //  most value above average TPSF
+				minValue = (Discount * avgTPSF).toFixed(0); // least value below the average TPSF
+				maxValue = (Premium * avgTPSF).toFixed(0); //  most value above average TPSF
 
 				// Calculate average price per square foot (PPSF) from the avgs.records
 				avgPPSF = avgs.records[0][avgs.value] / avgs.records[0][avgs.sqft];
-				minRate = (0.7 * avgPPSF).toFixed(0); // 30% below average
-				maxRate = (1.2 * avgPPSF).toFixed(0); // 20% above average
-
+				minRate = (Discount * avgPPSF).toFixed(0); // 30% below average
+				maxRate = (Premium * avgPPSF).toFixed(0); // 20% above average
 
 				// create datapoints to define vertical reference lines at each assessment size
 				assessments.forEach((a) => {
@@ -363,7 +363,7 @@
 				//console.log( minSqft, maxSqft);
 				updateLineSqft(minSf, maxSf);
 
-				// Create TPSF reference line for each set average property tax
+				// Create average-value reference line for each assesssment
 				avgs.records.forEach((record, index) => {
 					const label = record[avgs.label];
 					if ('' === label) {
@@ -385,23 +385,23 @@
 						return;
 					}
 
-					const TPSF = (value / sqft).toPrecision(3); // Taxes Per Square Foot
-					// console.log(`${label}: $${TPSF} per sqft`);
-					lines.records.push([minSf, minSf * TPSF, '', label, TPSF]);
-					lines.records.push([maxSf, maxSf * TPSF, label + AVG + ': $' + TPSF + '/sf', label, TPSF]);
+					const VPSF = (value / sqft).toPrecision(3); // Value Per Square Foot
+					// console.log(`${label}: $${VPSF} per sqft`);
+					lines.records.push([minSf, minSf * VPSF, '', label, VPSF]);
+					lines.records.push([maxSf, maxSf * VPSF, label + AVG + ': $' + VPSF + '/sf', label, VPSF]);
 				});
 				console.log('Reference lines: ', ...lines.records);
 			} // AddAssessmentReferenceLines
 
 			// Find the average property values for the currently selected sets
 			function findAllSetAverages() {
-				const scattersets = [ YR23, YR24, OTHER ];
+				const scattersets = [ SET1, SET2, OTHER ];
 				scattersets.forEach((set) => {
 					let setRecords;
 					if ( set === OTHER ) {
-						// For 'Other', filter properties where set is neither 2023 nor 2024
+						// properties where set is neither SET1 nor SET2
 						setRecords = properties.records.filter(
-							(record) => record[properties.set] !== YR23 && record[properties.set] !== YR24
+							(record) => record[properties.set] !== SET1 && record[properties.set] !== SET2
 						);
 					} else {
 						setRecords = properties.records.filter((record) => record[properties.set] === set);
@@ -439,10 +439,10 @@
 						metrics.cnt++;
 					} else if (
 						selectedSets.includes( OTHER ) &&
-						record[properties.set] !== YR23 &&
-						record[properties.set] !== YR24
+						record[properties.set] !== SET1 &&
+						record[properties.set] !== SET2
 					) {
-						// If 'Other' is selected, include records that are not YR23, nor YR24
+						// include records that are not SET1 nor SET2
 						metrics.sqft += record[properties.sqft];
 						metrics.value += record[properties.value];
 						metrics.cnt++;
@@ -464,7 +464,7 @@
 				} else {
 					filteredData = properties.records.filter((record) => record[properties.set] === setType);
 				}
-				console.log('Add', filteredData.length, setType );
+				console.log('Add', filteredData.length, sets[setType].label);
 
 				if (filteredData.length === 0) {
 					console.warn('no data filtered for scatter', setType);
@@ -504,8 +504,8 @@
 					note: record[properties.note], // note may contain $/sqft
 				}));
 
-				// log specifcally for 2023 and 2024 sets
-				if ( YR23 == set || YR24 == set) {
+				// log specifcally for SET1, SET2, and RL_AM
+				if ( SET1 == set || SET2 == set) {
 					const ppsf = 1.0 * (recDataset[0].y / recDataset[0].x).toPrecision(3);
 					console.log('Add line:', sets[set].label, 'avg', ppsf, '$/sqft');
 				} else {
@@ -551,7 +551,7 @@
 				}
 
 				// Handle the main scatter points
-				const scatterPointTypes = [ YR23, YR24, OTHER ]; // could add Redfin, etc.
+				const scatterPointTypes = [ SET1, SET2, OTHER ]; // could add Redfin, etc.
 				scatterPointTypes.forEach((set) => {
 					if (selectedSets.includes(set)) {
 						const scatterData = createScatterDataset(set);
@@ -593,7 +593,7 @@
 								position: 'bottom',
 								title: {
 									display: true,
-									text: 'Assessed Square Feet',
+									text: XAXISLABEL,
 									fontColor: '#555',
 									fontSize: 16,
 									padding: 8,
@@ -610,7 +610,7 @@
 								position: 'left',
 								title: {
 									display: true,
-									text: 'Taxes Paid',
+									text: YAXISLABEL,
 									fontColor: '#555',
 									font: {
 										size: 16,
@@ -623,19 +623,14 @@
 									font: {
 										color: '#666',
 									},
-									callback: function (value) {
-										if (value >= 10000) { // taxes are generally under $10,000
-											return (value / 1000).toPrecision(2) + 'K';
-										}
-										return value.toLocaleString();
-									},
+									callback: valueFormatter,
 								},
 							},
 						},
 						plugins: {
 							title: {
 								display: true,
-								text: 'Recent Property Taxes by Assessed Square Footage',
+								text: YAXISLABEL + ' by ' + XAXISLABEL,
 								font: {
 									size: 18,
 									color: '#333',
@@ -649,17 +644,16 @@
 										if (label) {
 											label += ': ';
 										}
-										let price = context.parsed.y; // Use parsed.y for the numerical value
-										label += `$${price.toLocaleString()} for ${context.parsed.x} sq ft`; //
+										label += valueFormatter( context.parsed.y );
 
-										// Add the specific point label if available (useful for reference lines)
-										if (context.raw && context.raw.label) {
-											label += ` - ${context.raw.label}`;
+										// Add the date if available
+										if (context.raw && context.raw.date) {
+											label += ` ${context.raw.date}`;
 										}
 										return label;
 									},
 									title: function (context) {
-										// For scatter points, show the property label
+										// For scatter points, show the property label and date
 										if (
 											context[0].dataset.type === 'scatter' &&
 											context[0].raw &&
@@ -716,10 +710,10 @@
 				const fa = findAverages(selectedSets);
 				console.log('Metrics for selections: ', fa);
 
-				const tpsf = (fa.value / fa.sqft).toPrecision(3);
-				statisticsElement.innerHTML = 'Average of ' + fa.cnt + ' taxes: ';
-				statisticsElement.innerHTML += '$' + tpsf + '/sq ft, ';
-				statisticsElement.innerHTML += '$' + fa.value.toFixed(0) + ' ';
+				const vpsf = (fa.value / fa.sqft).toPrecision(3);
+				statisticsElement.innerHTML = 'Average of ' + fa.cnt + ' properties: ';
+				statisticsElement.innerHTML += '$' + vpsf + '/sq ft, $';
+				statisticsElement.innerHTML += valueFormatter( fa.value ) + ', ';
 				statisticsElement.innerHTML += fa.sqft + ' sq ft';
 			} // end updateChart()
 		</script>
